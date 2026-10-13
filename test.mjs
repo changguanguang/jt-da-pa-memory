@@ -3,7 +3,7 @@
  *   node test.mjs
  */
 import assert from 'node:assert/strict'
-import { remember, recall, forget, update, consolidate, undo, buildInjection, tokenize, memoryCommandDefinition, commandList, dream, archiveStale, profileOf, resolveConfig, apply as applyPlugin } from './index.js'
+import { remember, recall, forget, update, consolidate, undo, buildInjection, tokenize, memoryCommandDefinition, commandList, dream, archiveStale, profileOf, resolveConfig, profileCommandDefinition, commandProfile, apply as applyPlugin } from './index.js'
 
 const fresh = () => ({ version: 1, memories: [], log: [], updatedAt: 0 })
 let pass = 0
@@ -174,6 +174,21 @@ console.log('jt-da-pa-memory tests')
   assert.ok(block.indexOf('名字叫小蓝') < block.indexOf('在北京工作')); ok('身份排在事实前面')
 }
 
+// --- /profile 命令 ---
+{
+  const s = fresh()
+  remember(s, { text: '名字叫小蓝', category: 'identity', importance: 5 })
+  remember(s, { text: '喜欢简短的回答', category: 'preference', importance: 4 })
+  const prof = profileCommandDefinition(s, () => {}).handler({})
+  assert.equal(prof.kind, 'success'); ok('/profile 返回成功')
+  assert.ok(prof.text.includes('关于你')); ok('/profile 标题')
+  assert.ok(prof.text.includes('名字叫小蓝')); ok('/profile 含身份')
+  assert.ok(prof.text.includes('喜欢简短的回答')); ok('/profile 含偏好')
+  assert.ok(commandProfile(fresh()).includes('还没有形成')); ok('空画像提示')
+  const viaMemory = memoryCommandDefinition(s, () => {}, {}).handler({ rawInput: 'profile' })
+  assert.ok(viaMemory.text.includes('名字叫小蓝')); ok('/memory profile 也能看画像')
+}
+
 // --- dream：整理 + 归档 ---
 {
   const s = fresh()
@@ -233,6 +248,7 @@ console.log('jt-da-pa-memory tests')
   assert.equal(created[0].sessionId, 'sess_1'); ok('提醒绑定到当前会话')
   assert.equal(created[0].req.prompt, '该喝水了'); ok('提醒内容正确')
   assert.equal(created[0].req.after_seconds, 600); ok('时间选择器传递')
+  assert.ok(created[0].req.title.startsWith('主动·')); ok('提醒标题带「主动·」前缀（可辨识）')
   const bad = await remind.execute({ text: '没时间' }, exec)
   assert.equal(bad.ok, false); ok('缺少时间时报错')
   const list = ctx._defs.find((d) => d.name === 'memory_reminders')

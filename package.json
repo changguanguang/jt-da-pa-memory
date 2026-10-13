@@ -1,6 +1,6 @@
 {
   "name": "jt-da-pa-memory",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "个人 AI 风格的跨会话记忆插件：记住关于你的事实（个性化画像），带出处与重要性/时间衰减打分；结合 dsh 定时服务的主动打扰；空闲时 dream 自动整理。零运行时依赖。",
   "keywords": [
     "deepseek-harness",

@@ -65,6 +65,8 @@
 | `/memory forget id:pm_1a2b3c4d` | 按 id 删除一条 |
 | `/memory undo` | 撤销最近一次删除 / 合并 / 归档 |
 | `/memory tidy` | 整理（同 dream） |
+| `/memory profile` | 只看【关于你】画像 |
+| `/profile` | 同上（单独命令） |
 | `/dream` | 手动整理记忆 |
 | `/memory help` | 显示帮助 |
 
@@ -163,6 +165,36 @@ dsh --profile web --dump-config | grep jt-da-pa-memory
 ### 在哪里「看到」记忆生效
 
 记忆不是显示在某个面板里，而是**每轮对话自动注入**给模型。验证：记一条 → 新开会话 → 问相关问题，它能答上来就说明生效了。
+
+### 在哪里看「用户画像」
+
+画像 = 记忆里 `identity` + `preference` 两类，即注入里的【关于你】段。三种看法：
+
+1. 输入框敲 **`/profile`**（或 `/memory profile`）—— 直接列出身份与偏好。
+2. 问 agent「**你了解我什么**」→ 它会调 `memory_profile`。
+3. 看 `memory.json` 里 `category` 为 `identity` / `preference` 的条目。
+
+> 画像不会自己出现——它来自你告诉 agent 的关于自己的事。你可以直接说「记住我叫小蓝，是后端工程师」「记住我喜欢简短的回答」，它们会归到 `identity` / `preference`。
+
+---
+
+## ⚠️ 关于「提醒」：谁实现的
+
+**提醒的投递引擎是 dsh 自带的，不是本插件发明的。** 这点很重要，说清楚：
+
+- dsh 的 `standard` preset 本来就挂了 `schedule_create/list/delete/update`（`@deepseek-ai/dsh-tool-schedule`）。
+- 本插件的 `memory_remind` **调用同一个 `ctx.schedule` 服务**（故意复用，不重复造轮子）。
+- 所以「到点唤醒会话、agent 主动说话」这套机制是 **dsh-schedule** 的；本插件提供的是 `memory_remind` **工具 + 主动打扰的语义包装**。
+
+**怎么判断某次提醒是哪边触发的：**
+
+| 看哪里 | 本插件 | dsh 自带 |
+|---|---|---|
+| 对话里的**工具名** | `memory_remind` | `schedule_create` |
+| 工具**返回文案** | `已安排主动提醒「…」（sch_xxx）。到点我会主动找你。` | 另一种措辞 |
+| 提醒**标题** | 带 `主动·` 前缀 | 原样 |
+
+两者最终都落在 dsh 的同一个任务列表里，所以在 dsh 的日程/任务界面都能看到与取消。
 
 ---
 

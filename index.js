@@ -539,7 +539,7 @@ function buildTools(store, save, ctx, scheduleRef, cfg) {
         if (!svc) return { ok: false, id: '', title: '', error: '此 profile 未启用定时服务（dsh-schedule），无法安排主动提醒。' }
         const agent = exec && exec.agent
         if (!agent || !agent.session || !agent.session.id) return { ok: false, id: '', title: '', error: '无法确定当前会话。' }
-        const req = { prompt: args.text, title: String(args.title || args.text).slice(0, 120) }
+        const req = { prompt: args.text, title: '主动·' + String(args.title || args.text).slice(0, 116) }
         for (const k of ['after_seconds', 'at', 'daily', 'weekly', 'cron', 'every_seconds']) if (args[k] != null) req[k] = args[k]
         if (!['after_seconds', 'at', 'daily', 'weekly', 'cron', 'every_seconds'].some((k) => req[k] != null)) {
           return { ok: false, id: '', title: '', error: '必须给一个时间：after_seconds / at / daily / weekly / cron。' }
@@ -618,6 +618,8 @@ const MEMORY_HELP = [
   '  /memory forget id:<id>     按 id 删除一条',
   '  /memory undo               撤销最近一次删除/合并/归档',
   '  /memory tidy               整理（同 dream）',
+  '  /memory profile            只看【关于你】画像',
+  '  /profile                   同上（单独命令）',
   '  /dream                     手动整理记忆',
   '  /memory help               显示本帮助',
   '',
@@ -670,9 +672,37 @@ export function memoryCommandDefinition(store, save, cfg) {
         }
         if (verb === 'undo') { const r = undo(store); save(); return r.undone ? { kind: 'success', text: `已撤销：${r.action}。` } : { kind: 'error', text: '没有可撤销的改动。' } }
         if (verb === 'tidy') { const r = dream(store, cfg); save(); return { kind: 'success', text: `记忆已整理：合并 ${r.merged}，删除 ${r.dropped}，归档 ${r.archived}；保留 ${r.total}。` } }
+        if (verb === 'profile') return { kind: 'success', text: commandProfile(store) }
         return { kind: 'error', text: `未知子命令：${verb}\n\n${MEMORY_HELP}` }
       } catch (e) { return { kind: 'error', text: '记忆命令出错：' + (e && e.message ? e.message : String(e)) } }
     },
+  }
+}
+
+export function commandProfile(store) {
+  const { identity, preference } = profileOf(store)
+  if (!identity.length && !preference.length) {
+    return [
+      '还没有形成你的个人画像。',
+      '当你说到关于自己的事（名字、身份、偏好、习惯）时，我会记下来，例如：',
+      '  - 记住我叫小蓝，身份是后端工程师',
+      '  - 记住我喜欢简短直接的回答',
+      '这些会归到 identity / preference，作为【关于你】每轮注入。',
+    ].join('\n')
+  }
+  const out = ['【关于你】—— 我记住的你的画像：']
+  if (identity.length) { out.push('身份：'); for (const m of identity) out.push(`  - ${m.text}  [${m.id}]`) }
+  if (preference.length) { out.push('偏好与习惯：'); for (const m of preference) out.push(`  - ${m.text}  [${m.id}]`) }
+  out.push('', '修改：/memory forget id:<id> 删掉，或直接说「记住……」。')
+  return out.join('\n')
+}
+
+/** 构造 /profile 命令（只看画像）。 */
+export function profileCommandDefinition(store, save) {
+  return {
+    name: 'profile',
+    description: '查看 jt-da-pa 记住的「关于你」个性化画像（身份 + 偏好）',
+    handler() { try { return { kind: 'success', text: commandProfile(store) } } catch (e) { return { kind: 'error', text: '读取画像出错：' + (e && e.message ? e.message : String(e)) } } },
   }
 }
 
@@ -724,6 +754,7 @@ export function apply(ctx, config = {}) {
   // 3) 人类命令 /memory、/dream
   ctx.inject(['commands'], (cmdCtx) => {
     ctx.effect(() => cmdCtx.commands.register(memoryCommandDefinition(store, save, cfg)), 'jt-da-pa-memory: /memory')
+    ctx.effect(() => cmdCtx.commands.register(profileCommandDefinition(store, save)), 'jt-da-pa-memory: /profile')
     ctx.effect(() => cmdCtx.commands.register(dreamCommandDefinition(store, save, cfg)), 'jt-da-pa-memory: /dream')
   })
 
