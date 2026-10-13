@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "jt-da-pa Memory",
-    "description": "Personal-AI cross-session memory: durable facts about you, with provenance, importance/recency scoring, consolidation and undo."
+    "description": "Personal-AI cross-session memory: a personal profile, proactive nudges via dsh's schedule service, and idle-triggered dream consolidation. Readable, editable, undoable."
   }
 }

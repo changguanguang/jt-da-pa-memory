@@ -1,7 +1,7 @@
 {
   "name": "jt-da-pa-memory",
-  "version": "0.1.0",
-  "description": "个人 AI 风格的跨会话记忆插件：记住关于你的事实（身份/偏好/长期事实），带出处、重要性与时间衰减打分，可整理、可撤销。零运行时依赖。",
+  "version": "0.2.0",
+  "description": "个人 AI 风格的跨会话记忆插件：记住关于你的事实（个性化画像），带出处与重要性/时间衰减打分；结合 dsh 定时服务的主动打扰；空闲时 dream 自动整理。零运行时依赖。",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -10,7 +10,10 @@
     "memory",
     "personal-ai",
     "long-term-memory",
-    "cross-session-memory"
+    "proactive",
+    "reminder",
+    "dream",
+    "consolidation"
   ],
   "type": "module",
   "main": "index.js",

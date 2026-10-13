@@ -3,7 +3,7 @@
  *   node test.mjs
  */
 import assert from 'node:assert/strict'
-import { remember, recall, forget, update, consolidate, undo, buildInjection, tokenize, memoryCommandDefinition, commandList } from './index.js'
+import { remember, recall, forget, update, consolidate, undo, buildInjection, tokenize, memoryCommandDefinition, commandList, dream, archiveStale, profileOf, resolveConfig, apply as applyPlugin } from './index.js'
 
 const fresh = () => ({ version: 1, memories: [], log: [], updatedAt: 0 })
 let pass = 0
@@ -158,6 +158,100 @@ console.log('jt-da-pa-memory tests')
   assert.equal(bad.kind, 'error'); ok('/memory 未知子命令报错')
   assert.ok(run('help').text.includes('/memory')); ok('/memory help 显示帮助')
   assert.ok(commandList(fresh()).includes('还是空的')); ok('空库 /memory 提示中文')
+}
+
+// --- 个性化：关于你（身份 + 偏好）---
+{
+  const s = fresh()
+  remember(s, { text: '名字叫小蓝', category: 'identity', importance: 5 })
+  remember(s, { text: '喜欢简短的回答', category: 'preference', importance: 4 })
+  remember(s, { text: '在北京工作', category: 'fact', importance: 2 })
+  const p = profileOf(s)
+  assert.equal(p.identity.length, 1); ok('画像含身份')
+  assert.equal(p.preference.length, 1); ok('画像含偏好')
+  const block = buildInjection(s)
+  assert.ok(block.includes('### 关于你')); ok('注入含【关于你】画像段')
+  assert.ok(block.indexOf('名字叫小蓝') < block.indexOf('在北京工作')); ok('身份排在事实前面')
+}
+
+// --- dream：整理 + 归档 ---
+{
+  const s = fresh()
+  remember(s, { text: 'prefers window seat', category: 'preference', importance: 3 })
+  remember(s, { text: 'prefers a window seat please', category: 'preference', importance: 2 })
+  // 一条陈旧、低价值、从未访问的记忆（应被归档）
+  const old = remember(s, { text: '问了京都的天气', category: 'other', importance: 1 }).item
+  old.createdAt = old.updatedAt = Date.now() - 200 * 86400000
+  const cfg = resolveConfig({ dream: { idleMinutes: 30, archiveAfterDays: 120 } })
+  const r = dream(s, cfg)
+  assert.ok(r.merged >= 0); ok('dream 合并近重复')
+  assert.equal(r.archived, 1); ok('dream 归档陈旧低价值条目')
+  assert.equal(s.lastDreamAt > 0, true); ok('dream 记录时间戳')
+  // 归档可撤销
+  const totalLive = s.memories.filter((m) => !m.archived).length
+  undo(s)
+  assert.ok(s.memories.filter((m) => !m.archived).length >= totalLive); ok('归档可撤销')
+}
+
+// --- archiveStale：高价值不归档 ---
+{
+  const s = fresh()
+  const a = remember(s, { text: '重要的身份', category: 'identity', importance: 5 }).item
+  a.createdAt = a.updatedAt = Date.now() - 400 * 86400000
+  const b = remember(s, { text: '不重要的旧事', category: 'other', importance: 1 }).item
+  b.createdAt = b.updatedAt = Date.now() - 400 * 86400000
+  const r = archiveStale(s, 120)
+  assert.equal(r.archived, 1); ok('只归档低价值条目')
+  assert.equal(s.memories.find((m) => m.id === a.id).archived || false, false); ok('高价值条目不被归档')
+}
+
+// --- 主动打扰：memory_remind 经 ctx.schedule ---
+{
+  const s = fresh()
+  const created = []
+  const ctx = {
+    logger: {},
+    tools: { register: (d) => { ctx._defs.push(d); return () => {} } },
+    effect: (f) => { f(); return () => {} },
+    inject: (deps, cb) => {
+      if (deps[0] === 'schedule') cb({ schedule: {
+        create: async (sessionId, req) => { created.push({ sessionId, req }); return { id: 'sch_1', title: req.title } },
+        list: async () => [{ id: 'sch_1', title: '喝水' }],
+        delete: async () => ({}),
+      } })
+      if (deps[0] === 'systemPrompt') cb({ systemPrompt: { context: () => () => {} } })
+      if (deps[0] === 'commands') cb({ commands: { register: () => () => {} } })
+    },
+    _defs: [],
+  }
+  applyPlugin(ctx, { dream: { enabled: false } })
+  assert.equal(ctx._defs.length, 11); ok('注册了 11 个工具（含新增 4 个）')
+  const remind = ctx._defs.find((d) => d.name === 'memory_remind')
+  const exec = { agent: { session: { id: 'sess_1' } }, signal: { aborted: false } }
+  const r = await remind.execute({ text: '该喝水了', after_seconds: 600 }, exec)
+  assert.equal(r.ok, true); ok('memory_remind 安排成功')
+  assert.equal(created[0].sessionId, 'sess_1'); ok('提醒绑定到当前会话')
+  assert.equal(created[0].req.prompt, '该喝水了'); ok('提醒内容正确')
+  assert.equal(created[0].req.after_seconds, 600); ok('时间选择器传递')
+  const bad = await remind.execute({ text: '没时间' }, exec)
+  assert.equal(bad.ok, false); ok('缺少时间时报错')
+  const list = ctx._defs.find((d) => d.name === 'memory_reminders')
+  assert.equal((await list.execute({}, exec))[0].id, 'sch_1'); ok('memory_reminders 列出')
+}
+
+// --- 无定时服务时主动打扰优雅降级 ---
+{
+  const s = fresh()
+  const ctx = {
+    logger: {}, tools: { register: (d) => { ctx._defs.push(d); return () => {} } }, effect: (f) => { f(); return () => {} },
+    inject: (deps, cb) => { if (deps[0] === 'systemPrompt') cb({ systemPrompt: { context: () => () => {} } }) },
+    _defs: [],
+  }
+  applyPlugin(ctx, { dream: { enabled: false } })
+  const remind = ctx._defs.find((d) => d.name === 'memory_remind')
+  const r = await remind.execute({ text: 'x', after_seconds: 60 }, { agent: { session: { id: 's' } } })
+  assert.equal(r.ok, false); ok('无 dsh-schedule 时返回明确错误')
+  assert.ok(r.error.includes('定时服务')); ok('错误信息说明原因')
 }
 
 console.log(`\n${pass} passed`)
