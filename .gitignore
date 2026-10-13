@@ -1,0 +1,15 @@
+# 依赖与构建产物
+node_modules/
+lib/
+dist/
+
+# 记忆数据（本地运行时生成，绝不入库）
+*.tmp-*
+.corrupt-*
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

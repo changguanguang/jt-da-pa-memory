@@ -1,0 +1,9 @@
+# jt-da-pa-memory bundle patch — inserts this plugin into a profile's layer stack.
+# A profile that lists this bundle (or a user patch that copies the row) mounts the
+# plugin. `name` is the package specifier, resolved by Node from the profile.
+- insert:
+    - id: jt-da-pa-memory
+      name: 'jt-da-pa-memory'
+      # Optional configuration (delete this block to use the defaults):
+      # config:
+      #   dir: '/absolute/path/to/store'   # default: $DSH_HOME/jt-da-pa-memory

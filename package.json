@@ -1,0 +1,37 @@
+{
+  "name": "jt-da-pa-memory",
+  "version": "0.1.0",
+  "description": "个人 AI 风格的跨会话记忆插件：记住关于你的事实（身份/偏好/长期事实），带出处、重要性与时间衰减打分，可整理、可撤销。零运行时依赖。",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "记忆",
+    "memory",
+    "personal-ai",
+    "long-term-memory",
+    "cross-session-memory"
+  ],
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "README.md"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
