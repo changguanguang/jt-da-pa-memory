@@ -1,20 +1,30 @@
 /**
  * jt-da-pa-memory —— 浏览器半（Web Client）。
  *
- * 在 dsh 的 Web UI 里加一个「记忆」面板：侧边栏一个图标 + 点开后的主区页面，
- * 列出全部记忆、可删除、可手动添加。数据来自宿主半的 HTTP 接口
- * （/jt-da-pa-memory/api/*，由 ctx.webServer 注册）。
+ * 在 dsh 的 Web UI 里加一个「记忆」面板：侧边栏一个图标 + 点开后的主区页面。
+ * 数据来自宿主半的 HTTP 接口（/jt-da-pa-memory/api/*）。
  *
- * 纯 JS、无编译：不用 JSX，用 React.createElement；由 dsh 的客户端模块系统加载
- * （window.__ModuleLoader__.load）。插槽用法对齐 dsh 自带的 ui-schedule。
+ * 纯 JS、无编译；由 dsh 的客户端模块系统加载（window.__ModuleLoader__.load）。
+ * 插槽用法对齐 dsh 自带的 ui-schedule。
+ *
+ * 诊断：控制台会打印 [jt-da-pa-memory] 开头的几行，用于定位加载到哪一步。
  */
 window.__ModuleLoader__.load({
   id: 'jt-da-pa-memory',
   factory(require) {
-    try { console.log('[jt-da-pa-memory] client half loaded'); } catch { /* ignore */ }
-    const React = require('react');
+    var log = function () { try { console.log.apply(console, ['[jt-da-pa-memory]'].concat([].slice.call(arguments))); } catch (e) {} };
+    log('client bundle loaded');
+
+    let React;
+    try {
+      React = require('react');
+    } catch (e) {
+      log('require("react") FAILED:', e && e.message);
+      throw e;
+    }
     const h = React.createElement;
     const PANEL_ID = 'jt-da-pa-memory';
+    const NS = 'jt-da-pa-memory';
     const API = '/jt-da-pa-memory/api/';
 
     function api(path, body) {
@@ -23,7 +33,7 @@ window.__ModuleLoader__.load({
         : undefined).then((r) => r.json());
     }
 
-    /** 侧边栏图标（一个大脑轮廓）。收到 { size } 由渲染器传入。 */
+    /** 侧边栏图标（大脑轮廓）。渲染器会传入 { size, active }。 */
     function MemoryIcon({ size }) {
       return h('svg', {
         viewBox: '0 0 24 24', width: size || 18, height: size || 18,
@@ -36,7 +46,7 @@ window.__ModuleLoader__.load({
       const [state, set] = React.useState({ loading: true, memories: [], error: null });
       const load = React.useCallback(() => {
         api('list')
-          .then((d) => set({ loading: false, memories: d.memories || [], error: null }))
+          .then((d) => set({ loading: false, memories: (d && d.memories) || [], error: null }))
           .catch((e) => set({ loading: false, memories: [], error: String(e) }));
       }, []);
       React.useEffect(() => { load(); }, [load]);
@@ -79,15 +89,29 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots'],
+      inject: ['slots', 'locale'],
       apply(ctx) {
-        try { console.log('[jt-da-pa-memory] registering slots'); } catch { /* ignore */ }
+        log('apply() called. slots=' + !!ctx.slots + ' locale=' + !!ctx.locale);
+        // 语言表（可缺省，仅让侧边栏标签本地化）
+        try {
+          if (ctx.locale && typeof ctx.locale.register === 'function') {
+            ctx.effect(() => ctx.locale.register(NS, { zh: { panel: '记忆' }, en: { panel: 'Memory' } }), 'jt-da-pa-memory: i18n');
+          }
+        } catch (e) { log('locale.register failed', e && e.message); }
+
         // 主区页面（由侧边栏图标激活）
-        ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID }, MemoryPanel));
+        try {
+          ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID, locale: NS }, MemoryPanel));
+          log('injected main');
+        } catch (e) { log('main inject failed', e && e.message); }
+
         // 侧边栏图标
-        ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
-          name: 'sidebar.panellist', id: PANEL_ID, order: 30, label: () => '记忆',
-        }, MemoryIcon));
+        try {
+          ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+            name: 'sidebar.panellist', id: PANEL_ID, order: 30, locale: NS, label: () => '记忆',
+          }, MemoryIcon));
+          log('injected sidebar.panellist');
+        } catch (e) { log('sidebar.panellist inject failed', e && e.message); }
       },
     };
   },
