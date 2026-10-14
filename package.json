@@ -1,7 +1,7 @@
 {
   "name": "jt-da-pa-memory",
-  "version": "0.2.1",
-  "description": "个人 AI 风格的跨会话记忆插件：记住关于你的事实（个性化画像），带出处与重要性/时间衰减打分；结合 dsh 定时服务的主动打扰；空闲时 dream 自动整理。零运行时依赖。",
+  "version": "0.3.1",
+  "description": "个人 AI 风格的跨会话记忆插件：个性化画像、双时态事实演化链、TTL 阶段性情境记忆、冲突预警、结合 dsh 定时服务的主动打扰与夜间 dream 整理。",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -10,6 +10,8 @@
     "memory",
     "personal-ai",
     "long-term-memory",
+    "bi-temporal",
+    "episodic-memory",
     "proactive",
     "reminder",
     "dream",
