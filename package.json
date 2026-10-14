@@ -1,7 +1,7 @@
 {
   "name": "jt-da-pa-memory",
-  "version": "0.3.1",
-  "description": "个人 AI 风格的跨会话记忆插件：个性化画像、双时态事实演化链、TTL 阶段性情境记忆、冲突预警、结合 dsh 定时服务的主动打扰与夜间 dream 整理。",
+  "version": "0.4.0",
+  "description": "个人 AI 风格的跨会话记忆插件：个性化画像、双时态事实演化链、TTL 阶段性情境记忆、冲突预警、结合 dsh 定时服务的主动打扰与夜间 dream 整理，并带一个 Web 记忆面板。",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -21,11 +21,13 @@
   "main": "index.js",
   "exports": {
     ".": "./index.js",
+    "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
     "index.js",
+    "client.js",
     "cordis.patch.yml",
     "locale/*.json",
     "README.md"
@@ -37,6 +39,13 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
     }
   }
 }

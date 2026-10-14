@@ -1021,6 +1021,110 @@ export function dreamCommandDefinition(store, save, cfg, sync = () => {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Web UI：宿主 HTTP 接口（ctx.webServer，可选）+ 独立页面
+// ---------------------------------------------------------------------------
+
+/** 接口与页面的挂载前缀。 */
+export const UI_PREFIX = '/jt-da-pa-memory'
+
+/** 读取一个 JSON 请求体（失败/超限都返回空对象，不抛）。 */
+function readBody(req) {
+  return new Promise((resolve) => {
+    let data = ''
+    req.on('data', (c) => { data += c; if (data.length > 2e6) req.destroy() })
+    req.on('end', () => { try { resolve(JSON.parse(data || '{}')) } catch { resolve({}) } })
+    req.on('error', () => resolve({}))
+  })
+}
+
+function sendJson(res, code, obj) {
+  res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+  res.end(JSON.stringify(obj))
+}
+
+/** 暴露给前端的字段（不含内部日志类字段）。 */
+function publicMemory(m) {
+  return { id: m.id, text: m.text, category: m.category, project: m.project || '', importance: m.importance, expiresAt: m.expiresAt || 0, archived: !!m.archived, updatedAt: m.updatedAt }
+}
+
+/** 构造宿主的 HTTP 处理器：一个 prefix 路由内部再分发。 */
+export function webHandlerFor(store, save, sync) {
+  return async (req, res) => {
+    const p = new URL(req.url || '/', 'http://127.0.0.1').pathname
+    try {
+      sync()
+      if (p === UI_PREFIX || p === UI_PREFIX + '/') {
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+        res.end(memoryPage())
+        return
+      }
+      if (p === UI_PREFIX + '/api/list') { sendJson(res, 200, { memories: store.memories.map(publicMemory) }); return }
+      if (p === UI_PREFIX + '/api/forget') { const b = await readBody(req); const r = forget(store, { id: b.id, query: b.query }); save(); sendJson(res, 200, r); return }
+      if (p === UI_PREFIX + '/api/update') { const b = await readBody(req); const it = update(store, b); save(); sendJson(res, 200, it ? publicMemory(it) : {}); return }
+      if (p === UI_PREFIX + '/api/add') { const b = await readBody(req); const r = remember(store, { text: b.text, category: b.category, importance: b.importance, project: b.project, expires_in_days: b.expires_in_days, source: { kind: 'person' } }); save(); sendJson(res, 200, publicMemory(r.item)); return }
+      if (p === UI_PREFIX + '/api/undo') { const r = undo(store); save(); sendJson(res, 200, r); return }
+      sendJson(res, 404, { error: 'not_found' })
+    } catch (e) {
+      sendJson(res, 500, { error: String((e && e.message) || e) })
+    }
+  }
+}
+
+/** 独立页面：打开 http://127.0.0.1:<port>/jt-da-pa-memory/ 就能看/删记忆。 */
+export function memoryPage() {
+  return `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>jt-da-pa 记忆</title>
+<style>
+:root{color-scheme:light dark}
+body{margin:0;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;background:#f6f7fb;color:#1c1f2a}
+main{max-width:820px;margin:0 auto;padding:32px 20px 80px}
+h1{font-size:22px;margin:0 0 4px}.sub{color:#5a6070;font-size:13px;margin-bottom:18px}
+.add{display:flex;gap:8px;margin-bottom:20px}
+.add input{flex:1}
+input,select,button{font:inherit;border:1px solid #cdd2de;border-radius:8px;padding:6px 10px;background:#fff;color:inherit}
+button{cursor:pointer}
+h3{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#5a6070;margin:22px 0 8px}
+ul{list-style:none;padding:0;margin:0}
+li{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#fff;border:1px solid #e3e6ee;border-radius:10px;margin-bottom:6px}
+.t{flex:1}.id{font:11px ui-monospace,monospace;color:#8b91a1}
+.exp{font-size:11px;color:#c47f00}.arch{opacity:.45;text-decoration:line-through}
+.del{color:#d23b3b;border-color:#f3c7c7}
+footer{margin-top:28px;color:#8b91a1;font-size:12px}
+</style></head><body><main>
+<h1>jt-da-pa 记忆</h1><div class="sub" id="sub">加载中…</div>
+<div class="add"><input type="text" id="new" placeholder="手动记一条…（回车）"><button id="addBtn">记住</button><button id="undoBtn" title="撤销最近一次删除/合并">撤销</button></div>
+<div id="list"></div>
+<footer>直接读写 $DSH_HOME/jt-da-pa-memory/memory.json。删除即刻生效，点“撤销”可回退。</footer>
+</main><script>
+var CATS=['identity','preference','fact','project','lesson','goal','other'];
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function api(p,b){return fetch('/jt-da-pa-memory/api/'+p,b?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)}:undefined).then(function(r){return r.json()})}
+function load(){api('list').then(function(d){render(d.memories||[])})}
+function render(items){
+  document.getElementById('sub').textContent='共 '+items.length+' 条';
+  var groups={};items.forEach(function(m){(groups[m.category]=groups[m.category]||[]).push(m)});
+  var order=CATS.concat(Object.keys(groups).filter(function(c){return CATS.indexOf(c)<0}));
+  var html='';order.forEach(function(cat){
+    var arr=groups[cat];if(!arr||!arr.length)return;
+    html+='<h3>'+esc(cat)+'</h3><ul>';
+    arr.forEach(function(m){
+      var exp=m.expiresAt?'<span class="exp">[至 '+new Date(m.expiresAt).toISOString().slice(0,10)+']</span>':'';
+      html+='<li><span class="t'+(m.archived?' arch':'')+'">'+esc(m.text)+'</span>'+exp+'<span class="id">'+m.id+'</span><button class="del" data-id="'+m.id+'">删除</button></li>';
+    });
+    html+='</ul>';
+  });
+  document.getElementById('list').innerHTML=html;
+  Array.prototype.forEach.call(document.querySelectorAll('.del'),function(b){b.onclick=function(){api('forget',{id:b.getAttribute('data-id')}).then(load)}});
+}
+document.getElementById('addBtn').onclick=function(){var v=document.getElementById('new').value.trim();if(!v)return;api('add',{text:v}).then(function(){document.getElementById('new').value='';load()})};
+document.getElementById('new').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('addBtn').click()});
+document.getElementById('undoBtn').onclick=function(){api('undo',{}).then(load)};
+load();
+</script></body></html>`
+}
+
+// ---------------------------------------------------------------------------
 // 插件入口
 // ---------------------------------------------------------------------------
 
@@ -1083,6 +1187,14 @@ export function apply(ctx, config = {}) {
       return () => clearInterval(timer)
     }, 'jt-da-pa-memory: dream timer')
   }
+
+  // 5) Web UI：宿主接口 + 独立页面（webServer 可选，缺席则无 UI）
+  ctx.inject(['webServer'], (wctx) => {
+    ctx.effect(
+      () => wctx.webServer.register({ kind: 'prefix', path: UI_PREFIX, handler: webHandlerFor(store, save, sync) }),
+      'jt-da-pa-memory: web routes',
+    )
+  })
 
   safeLog(ctx, `已加载 ${store.memories.length} 条记忆 (${file}); dream=${cfg.dream.enabled ? '开' : '关'}, 主动打扰=${cfg.proactive.enabled ? '开' : '关'}`)
 }
