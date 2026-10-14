@@ -11,6 +11,7 @@
 window.__ModuleLoader__.load({
   id: 'jt-da-pa-memory',
   factory(require) {
+    try { console.log('[jt-da-pa-memory] client half loaded'); } catch { /* ignore */ }
     const React = require('react');
     const h = React.createElement;
     const PANEL_ID = 'jt-da-pa-memory';
@@ -80,6 +81,7 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots'],
       apply(ctx) {
+        try { console.log('[jt-da-pa-memory] registering slots'); } catch { /* ignore */ }
         // 主区页面（由侧边栏图标激活）
         ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID }, MemoryPanel));
         // 侧边栏图标
